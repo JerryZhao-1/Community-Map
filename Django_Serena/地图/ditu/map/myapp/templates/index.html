@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My App</title>
+</head>
+<body>
+    <h1>{{ message }}</h1>
+</body>
+<style>
+    .recognition-container { max-width: 800px; margin: 40px auto; padding: 30px; background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .recognition-container h2 { text-align: center; color: #444; }
+    #recognition-form { display: flex; flex-direction: column; gap: 15px; }
+    #image-upload-label { border: 2px dashed #007bff; padding: 20px; border-radius: 8px; text-align: center; cursor: pointer; background-color: #f8f9fa; }
+    #image-preview { max-width: 100%; max-height: 200px; margin-top: 15px; border-radius: 8px; display: none; }
+    #result-area { margin-top: 20px; padding: 15px; border-radius: 8px; background-color: #e9ecef; text-align: left; display: none; word-break: break-all; }
+    #result-area h4 { margin-top: 0; border-bottom: 1px solid #ccc; padding-bottom: 5px;}
+    #result-area .final-result { font-size: 1.1em; font-weight: bold; margin-bottom: 15px; color: #0056b3; }
+</style>
+
+<div class="recognition-container">
+    <h2>混合图像识别引擎</h2>
+    <form id="recognition-form">
+        {% csrf_token %} <!-- 使用Django的CSRF token -->
+        <label for="image-input" id="image-upload-label">
+            点击此处上传图片
+            <img id="image-preview" src="#" alt="图片预览" />
+        </label>
+        <input type="file" id="image-input" name="image" accept="image/*" style="display: none;" required>
+        <input type="submit" value="开始识别" style="padding: 12px 20px; border: none; background: linear-gradient(135deg, #007bff, #0056b3); color: white; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;">
+    </form>
+    <div id="result-area"></div>
+</div>
+
+<script>
+    // 为了防止与你页面中可能存在的脚本冲突，我们使用新的变量名
+    const recForm = document.getElementById('recognition-form');
+    const recImageInput = document.getElementById('image-input');
+    const recImagePreview = document.getElementById('image-preview');
+    const recResultArea = document.getElementById('result-area');
+    // 获取CSRF token
+    const csrfToken = recForm.querySelector('input[name="csrfmiddlewaretoken"]').value;
+
+    recImageInput.addEventListener('change', function() {
+        if (this.files && this.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                recImagePreview.src = e.target.result;
+                recImagePreview.style.display = 'block';
+            }
+            reader.readAsDataURL(this.files[0]);
+        }
+    });
+
+    recForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(recForm);
+        if (!recImageInput.files[0]) {
+            recResultArea.style.display = 'block';
+            recResultArea.innerHTML = `<strong>错误:</strong> 请先选择一张图片。`;
+            return;
+        }
+        
+        recResultArea.style.display = 'block';
+        recResultArea.innerHTML = '正在调用双引擎识别，请稍候...';
+
+        fetch("{% url 'api_recognize' %}", {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken }, // 发送 CSRF token
+            body: formData,
+        })
+        .then(response => response.json())
+        .then(data => {
+            const { final_result, local_result, baidu_result } = data;
+            let htmlContent = '<h4>综合裁定结果:</h4>';
+            if (final_result && final_result.success) {
+                htmlContent += `<div class="final-result"><strong>识别为:</strong> ${final_result.landmark} <br><small>来源: ${final_result.source}</small></div>`;
+            } else {
+                htmlContent += `<p><strong>识别失败:</strong> ${final_result ? final_result.error : '未知错误'} </p>`;
+            }
+            htmlContent += '<hr><h4>引擎详细分析:</h4>';
+            htmlContent += `<div><strong>本地模型 (地标):</strong> ${local_result.success ? `"${local_result.landmark}" (置信度: ${local_result.confidence.toFixed(2)})` : `失败 - <em>${local_result.error}</em>`}</div>`;
+            htmlContent += `<div><strong>百度云 (门脸):</strong> ${baidu_result.success ? `"${baidu_result.landmark}" (置信度: ${baidu_result.confidence.toFixed(2)})` : `失败 - <em>${baidu_result.error}</em>`}</div>`;
+            recResultArea.innerHTML = htmlContent;
+        })
+        .catch(error => {
+            recResultArea.innerHTML = `<strong>请求错误:</strong> ${error}`;
+        });
+    });
+</script>
+</html>
