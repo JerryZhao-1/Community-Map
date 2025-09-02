@@ -1,0 +1,1 @@
+from .recognition_dispatcher import get_landmark
