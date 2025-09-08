@@ -10,7 +10,7 @@ class BaiduFacadeService:
         self.api_key = api_key
         self.secret_key = secret_key
         self.auth_url = "https://aip.baidubce.com/oauth/2.0/token"
-        self.recognize_url = "https://aip.baidubce.com/rest/2.0/realtime_search/v1/facade"
+        self.recognize_url = "https://aip.baidubce.com/rest/2.0/ocr/v1/facade"
         self._access_token = None
         self._token_expiry_time = 0
 
@@ -45,9 +45,12 @@ class BaiduFacadeService:
         try:
             img_base64 = base64.b64encode(image_bytes).decode('utf-8')
             headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-            params = {'access_token': access_token}
+            
+            # The access_token is now part of the URL, not params
+            url = f"{self.recognize_url}?access_token={access_token}"
             data = {'image': img_base64}
-            response = requests.post(self.recognize_url, headers=headers, params=params, data=data, timeout=10)
+
+            response = requests.post(url, headers=headers, data=data, timeout=10)
             response.raise_for_status()
             result = response.json()
 
@@ -55,9 +58,13 @@ class BaiduFacadeService:
                 logger.error(f"Baidu API returned an error: {result['error_msg']}")
                 return {'success': False, 'error': result['error_msg']}
 
-            if result and 'result' in result and result.get('result_num', 0) > 0:
-                first_match = result['result'][0]
-                return {'success': True, 'landmark': first_match.get('brief', 'Unknown Facade'), 'confidence': first_match.get('probability', 0) * 100, 'source': 'Baidu Facade API'}
+            if result and 'results' in result and result['results'].get('facade_num', 0) > 0:
+                first_match = result['results']['facade_result'][0]
+                landmark_name = first_match.get('name', 'Unknown Facade')
+                if landmark_name == 'Not Found':
+                    return {'success': False, 'error': 'Baidu API did not recognize any facade'}
+                
+                return {'success': True, 'landmark': landmark_name, 'source': 'Baidu Facade API'}
             else:
                 return {'success': False, 'error': 'Baidu API did not recognize any facade'}
         except requests.exceptions.RequestException as e:
