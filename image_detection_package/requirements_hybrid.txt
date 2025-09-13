@@ -1,0 +1,12 @@
+# Qwen + 本地模型（CPU）所需依赖
+# 若需 GPU/CUDA，请按 README 中的说明选择对应的索引安装 torch/torchvision
+
+# Qwen 直连
+Pillow>=10.0,<11
+requests>=2.31,<3
+numpy>=1.24,<2
+dashscope>=1.17,<2
+
+# 本地模型
+torch>=2.2.0
+torchvision>=0.17.0
